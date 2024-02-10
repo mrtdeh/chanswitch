@@ -1,6 +1,7 @@
 package chanswitch
 
 import (
+	"context"
 	"fmt"
 	"sync"
 )
@@ -43,7 +44,7 @@ func New() *BroadAny {
 }
 
 // set filed value
-func (b *BroadAny) Switch(v any) {
+func (b *BroadAny) Set(v any) {
 	b.sl.Lock()
 	defer b.sl.Unlock()
 	// make sure channels are created
@@ -67,6 +68,31 @@ func (b *BroadAny) Switch(v any) {
 		}
 	}
 
+}
+
+// thread safe wait until this field change to true
+func (b *BroadAny) WaitFor(ctx context.Context, v any) {
+	b.make(v)
+
+	ch := b.read(v)
+	if ch == nil {
+		panic(fmt.Sprintf("wait error : value %v not found", v))
+	}
+
+	defer func() {
+		if b.Value == v {
+			if ch != nil {
+				activeChan(ch.open)
+			}
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		fmt.Printf("context for %v is timeout\n", v)
+	case <-ch.open:
+		fmt.Printf("wait for %v done\n", v)
+	}
 }
 
 // check whether this field is true or not

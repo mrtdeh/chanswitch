@@ -1,6 +1,7 @@
 package chanswitch
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -9,7 +10,8 @@ import (
 func runIntTest(t *testing.T, m, n int) {
 
 	var c int
-	var d time.Duration = time.Millisecond * 1
+	// var d time.Duration = time.Millisecond * 1
+	var ctx = context.Background()
 
 	for i := 0; i < m; i++ {
 		fmt.Println("---------------------------")
@@ -18,41 +20,43 @@ func runIntTest(t *testing.T, m, n int) {
 
 			for {
 				select {
-				case <-b.On(100):
+				case <-b.Once(100):
 					c++
 					fmt.Println("running test for '100' ")
-				case <-b.Once(200):
+				case <-b.Once("test"):
 					c++
-					fmt.Println("running test for '200' ")
-				case <-b.Once(300):
+					fmt.Println("running test for 'test' ")
+				case <-b.Once(true):
 					c++
-					fmt.Println("running test for '300' ")
-				case <-b.Once(400):
-					c++
-					fmt.Println("running test for '400' ")
+					fmt.Println("running test for 'true' ")
+
 				}
 			}
 		}()
 
+		time.Sleep(time.Second)
+
 		for j := 0; j < n; j++ {
 			fmt.Println("**************************")
 
-			go b.Switch(100)
-			time.Sleep(d)
-			go b.Switch(200)
-			time.Sleep(d)
-			go b.Switch(300)
-			time.Sleep(d)
-			go b.Switch(400)
-			time.Sleep(d)
+			go b.Set(100)
+			b.WaitFor(ctx, 100)
+
+			go b.Set("test")
+			b.WaitFor(ctx, "test")
+
+			go b.Set(true)
+			b.WaitFor(ctx, true)
+
+			time.Sleep(time.Millisecond * 2)
 
 		}
 
 	}
 
-	time.Sleep(time.Second * 1)
+	time.Sleep(time.Second * 2)
 
-	if n*4 != c {
+	if n*3 != c {
 		t.Errorf("expected %v but got %v", n*4, c)
 	}
 }
