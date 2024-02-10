@@ -10,7 +10,6 @@ import (
 func runIntTest(t *testing.T, m, n int) {
 
 	var c int
-	// var d time.Duration = time.Millisecond * 1
 	var ctx = context.Background()
 
 	for i := 0; i < m; i++ {
@@ -34,7 +33,7 @@ func runIntTest(t *testing.T, m, n int) {
 			}
 		}()
 
-		time.Sleep(time.Second)
+		// time.Sleep(time.Second)
 
 		for j := 0; j < n; j++ {
 			fmt.Println("**************************")

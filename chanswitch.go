@@ -27,7 +27,6 @@ type BroadAny struct {
 	filters map[any]*Channels
 	Value   any
 	old     any
-	sl      sync.Mutex
 	fl      sync.RWMutex
 }
 
@@ -36,7 +35,6 @@ var active = struct{}{}
 func New() *BroadAny {
 	b := &BroadAny{
 		filters: make(map[any]*Channels),
-		sl:      sync.Mutex{},
 		fl:      sync.RWMutex{},
 	}
 
@@ -45,21 +43,13 @@ func New() *BroadAny {
 
 // set filed value
 func (b *BroadAny) Set(v any) {
-	b.sl.Lock()
-	defer b.sl.Unlock()
-	// make sure channels are created
-	b.make(v)
+	ch := b.make(v)
 
-	// active channel for this value
-	if ch := b.read(v); ch != nil {
-		b.old = b.Value
-		b.Value = v
-		activeChan(ch.open)
-		activeChan(ch.once)
+	b.old = b.Value
+	b.Value = v
+	activeChan(ch.open)
+	activeChan(ch.once)
 
-	} else {
-		panic("invalid value : filter value is not exist")
-	}
 	// deactive channel got other value
 	for k, ch := range b.filters {
 		if v != k {
@@ -72,12 +62,7 @@ func (b *BroadAny) Set(v any) {
 
 // thread safe wait until this field change to true
 func (b *BroadAny) WaitFor(ctx context.Context, v any) {
-	b.make(v)
-
-	ch := b.read(v)
-	if ch == nil {
-		panic(fmt.Sprintf("wait error : value %v not found", v))
-	}
+	ch := b.make(v)
 
 	defer func() {
 		if b.Value == v {
@@ -97,13 +82,7 @@ func (b *BroadAny) WaitFor(ctx context.Context, v any) {
 
 // check whether this field is true or not
 func (b *BroadAny) On(v any) <-chan struct{} { // Running Reproducible
-	// make sure channels are created
-	b.make(v)
-
-	ch := b.read(v)
-	if ch == nil {
-		panic(fmt.Sprintf("on error : value %v not found", v))
-	}
+	ch := b.make(v)
 
 	defer func() {
 		if b.Value == v {
@@ -117,14 +96,7 @@ func (b *BroadAny) On(v any) <-chan struct{} { // Running Reproducible
 }
 
 func (b *BroadAny) Once(v any) <-chan struct{} { // Running Once
-	// make sure channels are created
-	b.make(v)
-
-	ch := b.read(v)
-	if ch == nil {
-		panic(fmt.Sprintf("once error : value %v not found", v))
-	}
-
+	ch := b.make(v)
 	return ch.once
 }
 
@@ -146,12 +118,16 @@ func (b *BroadAny) set(v any, ch *Channels) {
 	b.filters[v] = ch
 }
 
-func (b *BroadAny) make(v any) {
+func (b *BroadAny) make(v any) *Channels {
 	if chs := b.read(v); chs == nil {
-		b.set(v, &Channels{
+		ch := &Channels{
 			open: make(chan struct{}, 1),
 			once: make(chan struct{}, 1),
-		})
+		}
+		b.set(v, ch)
+		return ch
+	} else {
+		return chs
 	}
 }
 
