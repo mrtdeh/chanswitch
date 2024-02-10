@@ -24,7 +24,7 @@ type Channels struct {
 
 type BroadAny struct {
 	filters map[any]*Channels
-	val     any
+	Value   any
 	old     any
 	sl      sync.Mutex
 	fl      sync.RWMutex
@@ -51,8 +51,8 @@ func (b *BroadAny) Switch(v any) {
 
 	// active channel for this value
 	if ch := b.read(v); ch != nil {
-		b.old = b.val
-		b.val = v
+		b.old = b.Value
+		b.Value = v
 		activeChan(ch.open)
 		activeChan(ch.once)
 
@@ -80,7 +80,7 @@ func (b *BroadAny) On(v any) <-chan struct{} { // Running Reproducible
 	}
 
 	defer func() {
-		if b.val == v {
+		if b.Value == v {
 			if ch != nil {
 				activeChan(ch.open)
 			}
