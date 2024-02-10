@@ -1,6 +1,7 @@
 package chanswitch
 
 import (
+	"fmt"
 	"sync"
 )
 
@@ -16,34 +17,26 @@ case <- test.Is(300).Chan():
 }
 */
 
-type BroadAny struct {
-	filters map[any]chan struct{}
-	val     any
-	l       sync.Mutex
-	open    bool
+type Channels struct {
+	open chan struct{}
+	once chan struct{}
+}
 
-	// ig int
+type BroadAny struct {
+	filters map[any]*Channels
+	val     any
+	old     any
+	sl      sync.Mutex
+	fl      sync.RWMutex
 }
 
 var active = struct{}{}
 
 func New() *BroadAny {
 	b := &BroadAny{
-		filters: make(map[any]chan struct{}),
-		val:     0,
-		l:       sync.Mutex{},
-		open:    false,
-	}
-
-	return b
-}
-
-func NewOpen() *BroadAny {
-	b := &BroadAny{
-		filters: make(map[any]chan struct{}),
-		val:     0,
-		l:       sync.Mutex{},
-		open:    true,
+		filters: make(map[any]*Channels),
+		sl:      sync.Mutex{},
+		fl:      sync.RWMutex{},
 	}
 
 	return b
@@ -51,42 +44,100 @@ func NewOpen() *BroadAny {
 
 // set filed value
 func (b *BroadAny) Switch(v any) {
-	b.l.Lock()
-	defer b.l.Unlock()
+	b.sl.Lock()
+	defer b.sl.Unlock()
+	// make sure channels are created
 	b.make(v)
 
-	b.val = v
+	// active channel for this value
+	if ch := b.read(v); ch != nil {
+		b.old = b.val
+		b.val = v
+		activeChan(ch.open)
+		activeChan(ch.once)
+
+	} else {
+		panic("invalid value : filter value is not exist")
+	}
+	// deactive channel got other value
 	for k, ch := range b.filters {
-		if v == k {
-			if len(ch) == 0 {
-				ch <- active
-			}
-		} else {
-			if len(ch) > 0 {
-				<-ch
-			}
+		if v != k {
+			closeChan(ch.open)
+			closeChan(ch.once)
 		}
 	}
 
 }
 
 // check whether this field is true or not
-func (b *BroadAny) On(v any) <-chan struct{} {
+func (b *BroadAny) On(v any) <-chan struct{} { // Running Reproducible
+	// make sure channels are created
 	b.make(v)
 
+	ch := b.read(v)
+	if ch == nil {
+		panic(fmt.Sprintf("on error : value %v not found", v))
+	}
+
 	defer func() {
-		if b.open && b.val == v {
-			if len(b.filters[v]) == 0 {
-				b.filters[v] <- active
+		if b.val == v {
+			if ch != nil {
+				activeChan(ch.open)
 			}
 		}
 	}()
 
-	return b.filters[v]
+	return ch.open
+}
+
+func (b *BroadAny) Once(v any) <-chan struct{} { // Running Once
+	// make sure channels are created
+	b.make(v)
+
+	ch := b.read(v)
+	if ch == nil {
+		panic(fmt.Sprintf("once error : value %v not found", v))
+	}
+
+	return ch.once
+}
+
+func (b *BroadAny) read(v any) *Channels {
+	b.fl.RLock()
+	defer b.fl.RUnlock()
+
+	ch, ok := b.filters[v]
+	if !ok {
+		return nil
+	}
+	return ch
+}
+
+func (b *BroadAny) set(v any, ch *Channels) {
+	b.fl.Lock()
+	defer b.fl.Unlock()
+
+	b.filters[v] = ch
 }
 
 func (b *BroadAny) make(v any) {
-	if _, ok := b.filters[v]; !ok {
-		b.filters[v] = make(chan struct{}, 1)
+	if chs := b.read(v); chs == nil {
+		b.set(v, &Channels{
+			open: make(chan struct{}, 1),
+			once: make(chan struct{}, 1),
+		})
+	}
+}
+
+func activeChan(c chan struct{}) {
+	if len(c) == 0 {
+		c <- struct{}{}
+	}
+}
+
+func closeChan(c chan struct{}) {
+	select {
+	case <-c:
+	default:
 	}
 }
