@@ -3,49 +3,39 @@ package chanswitch
 import (
 	"context"
 	"fmt"
-	"sync"
 )
-
-/*
-select {
-
-case <- test.Is(100).Chan():
-
-case <- test.Is(200).Chan():
-
-case <- test.Is(300).Chan():
-
-}
-*/
 
 type Channels struct {
 	open chan struct{}
 	once chan struct{}
 }
 
-type BroadAny struct {
+type ChanSwitch struct {
 	filters map[any]*Channels
 	Value   any
-	old     any
-	fl      sync.RWMutex
 }
 
 var active = struct{}{}
 
-func New() *BroadAny {
-	b := &BroadAny{
+func New(vals ...any) *ChanSwitch {
+	b := &ChanSwitch{
 		filters: make(map[any]*Channels),
-		fl:      sync.RWMutex{},
+	}
+
+	for _, v := range vals {
+		b.Make(v)
 	}
 
 	return b
 }
 
 // set filed value
-func (b *BroadAny) Set(v any) {
-	ch := b.make(v)
+func (b *ChanSwitch) Set(v any) {
+	ch := b.read(v)
+	if ch == nil {
+		panic(fmt.Sprintf("value not set : %v", v))
+	}
 
-	b.old = b.Value
 	b.Value = v
 	activeChan(ch.open)
 	activeChan(ch.once)
@@ -57,12 +47,14 @@ func (b *BroadAny) Set(v any) {
 			closeChan(ch.once)
 		}
 	}
-
 }
 
 // thread safe wait until this field change to true
-func (b *BroadAny) WaitFor(ctx context.Context, v any) {
-	ch := b.make(v)
+func (b *ChanSwitch) WaitFor(ctx context.Context, v any) {
+	ch := b.read(v)
+	if ch == nil {
+		panic(fmt.Sprintf("value not set : %v", v))
+	}
 
 	defer func() {
 		if b.Value == v {
@@ -81,8 +73,11 @@ func (b *BroadAny) WaitFor(ctx context.Context, v any) {
 }
 
 // check whether this field is true or not
-func (b *BroadAny) On(v any) <-chan struct{} { // Running Reproducible
-	ch := b.make(v)
+func (b *ChanSwitch) On(v any) <-chan struct{} { // Running Reproducible
+	ch := b.read(v)
+	if ch == nil {
+		panic(fmt.Sprintf("value not set : %v", v))
+	}
 
 	defer func() {
 		if b.Value == v {
@@ -95,30 +90,23 @@ func (b *BroadAny) On(v any) <-chan struct{} { // Running Reproducible
 	return ch.open
 }
 
-func (b *BroadAny) Once(v any) <-chan struct{} { // Running Once
-	ch := b.make(v)
+func (b *ChanSwitch) Once(v any) <-chan struct{} { // Running Once
+	ch := b.read(v)
+	if ch == nil {
+		panic(fmt.Sprintf("value not set : %v", v))
+	}
 	return ch.once
 }
 
-func (b *BroadAny) read(v any) *Channels {
-	b.fl.RLock()
-	defer b.fl.RUnlock()
-
-	ch, ok := b.filters[v]
-	if !ok {
-		return nil
-	}
-	return ch
+func (b *ChanSwitch) read(v any) *Channels {
+	return b.filters[v]
 }
 
-func (b *BroadAny) set(v any, ch *Channels) {
-	b.fl.Lock()
-	defer b.fl.Unlock()
-
+func (b *ChanSwitch) set(v any, ch *Channels) {
 	b.filters[v] = ch
 }
 
-func (b *BroadAny) make(v any) *Channels {
+func (b *ChanSwitch) Make(v any) *Channels {
 	if chs := b.read(v); chs == nil {
 		ch := &Channels{
 			open: make(chan struct{}, 1),
