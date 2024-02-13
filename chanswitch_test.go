@@ -7,23 +7,23 @@ import (
 	"time"
 )
 
-func worker(b *ChanSwitch, c *int) {
+func worker(b *ChanSwitch, id string, c *int) {
 	for {
 		select {
 		case <-b.Once("connecting"):
 			*c++
-			fmt.Println("running test for 'connecting' ")
+			// fmt.Printf("worker %s test for 'connecting'\n", id)
 		case <-b.Once("connected"):
 			*c++
-			fmt.Println("running test for 'connected' ")
+			// fmt.Printf("worker %s test for 'connected'\n", id)
 		case <-b.Once("disconnecting"):
 			*c++
-			fmt.Println("running test for 'disconnecting' ")
+			// fmt.Printf("worker %s test for 'disconnecting'\n", id)
 		case <-b.Once("disconnected"):
 			*c++
-			fmt.Println("running test for 'disconnected' ")
-		case <-b.Once("shutdown"):
-			fmt.Println("worker died")
+			// fmt.Printf("worker %s test for 'disconnected'\n", id)
+		case <-b.On("shutdown"):
+			fmt.Printf("worker %s shutdown\n", id)
 			return
 		}
 	}
@@ -45,28 +45,27 @@ func runIntTest(t *testing.T, m, n int) {
 	for i := 0; i < m; i++ {
 		fmt.Println("---------------------------")
 
-		go worker(b, &c)
-		go worker(b, &c)
-		go worker(b, &c)
-		go worker(b, &c)
-		go worker(b, &c)
+		for g := 0; g < 5; g++ {
+			go worker(b, fmt.Sprintf("g%d", g), &c)
+		}
 
 		time.Sleep(time.Second)
 
 		for j := 0; j < n; j++ {
-			fmt.Println("**************************")
+
+			// fmt.Println("*****************")
 
 			go b.Set("connecting")
-			b.WaitFor(ctx, "connecting")
+			// b.WaitFor(ctx, "connecting")
 
 			go b.Set("connected")
-			b.WaitFor(ctx, "connected")
+			// b.WaitFor(ctx, "connected")
 
 			go b.Set("disconnecting")
-			b.WaitFor(ctx, "disconnecting")
+			// b.WaitFor(ctx, "disconnecting")
 
 			go b.Set("disconnected")
-			b.WaitFor(ctx, "disconnected")
+			// b.WaitFor(ctx, "disconnected")
 		}
 
 		if m-1 == i {
@@ -85,5 +84,5 @@ func runIntTest(t *testing.T, m, n int) {
 }
 
 func TestIntSwitch(t *testing.T) {
-	runIntTest(t, 1, 10000)
+	runIntTest(t, 1, 500000)
 }
