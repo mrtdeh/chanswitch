@@ -21,7 +21,6 @@ func worker(b *ChanSwitch, id string, c *int) {
 			*c++
 			// fmt.Printf("worker %s test for 'disconnecting'\n", id)
 		case <-b.Once("disconnected"):
-			fmt.Println("disconnected")
 			*c++
 			// fmt.Printf("worker %s test for 'disconnected'\n", id)
 		case <-b.On("shutdown"):
@@ -54,8 +53,6 @@ func runIntTest(t *testing.T, m, n int) {
 		fmt.Println("---------------------------")
 
 		for j := 0; j < n; j++ {
-
-			// fmt.Println("*****************")
 
 			go b.Set("connecting")
 			// b.WaitFor(ctx, "connecting")
