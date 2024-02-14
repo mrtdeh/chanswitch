@@ -33,6 +33,18 @@ func New(vals ...any) *ChanSwitch {
 	return b
 }
 
+func NewBool() *ChanSwitch {
+	b := &ChanSwitch{
+		filters: make(map[any]*Channels),
+		l:       sync.Mutex{},
+	}
+
+	b.Make(true)
+	b.Make(false)
+
+	return b
+}
+
 func (b *ChanSwitch) Make(v any) *Channels {
 	if chs := b.read(v); chs == nil {
 		ch := &Channels{
