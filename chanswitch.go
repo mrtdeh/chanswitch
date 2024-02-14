@@ -65,30 +65,36 @@ func (b *ChanSwitch) Set(v any) {
 	closeChan(ch.first)
 	// reset once channel
 	activeChan(ch.once)
-	//
+	// goroutine for repeating open channel
 	go func(c *Channels) {
 		for {
 			select {
+			// on call stop channel
 			case <-c.stop:
+				// set stoped to true
 				c.stoped = true
 				return
+				// re-val open channel
 			case c.open <- struct{}{}:
 			}
 		}
 	}(ch)
-
 	// deactive channel got other value
 	for k, c := range b.filters {
 		if v != k {
 			if !c.stoped && len(c.stop) == 0 {
+				// active stop channel of old filter
 				activeChan(c.stop)
+				// close once channel of old filter
 				closeChan(c.once)
+				// close open channel of old filter
 				closeChan(c.open)
+				// close first channel of old filter
 				closeChan(c.first)
 			}
 		}
 	}
-
+	// active first channel
 	activeChan(ch.first)
 }
 
@@ -114,12 +120,6 @@ func (b *ChanSwitch) On(v any) chan struct{} { // Running Reproducible
 	return ch.open
 }
 
-func (b *ChanSwitch) log(v any, format string, a ...any) {
-	if b.val == v || v == "any" {
-		fmt.Printf(format+"\n", a...)
-	}
-}
-
 func (b *ChanSwitch) Once(v any) <-chan struct{} { // Running Once
 
 	ch := b.read(v)
@@ -140,6 +140,20 @@ func (b *ChanSwitch) set(v any, ch *Channels) {
 
 func (b *ChanSwitch) Value() any {
 	return b.val
+}
+
+func (b *ChanSwitch) Values() []any {
+	keys := make([]any, 0, len(b.filters))
+	for k := range b.filters {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+func (b *ChanSwitch) log(v any, format string, a ...any) {
+	if b.val == v || v == "any" {
+		fmt.Printf(format+"\n", a...)
+	}
 }
 
 func activeChan(c chan struct{}) {
