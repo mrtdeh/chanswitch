@@ -7,26 +7,44 @@ import (
 )
 
 type Channels struct {
-	stoped bool
-	open   chan struct{}
-	once   chan struct{}
-	first  chan struct{}
-	stop   chan struct{}
+	open  chan struct{}
+	once  chan struct{}
+	first chan struct{}
 }
 
 type ChanSwitch struct {
-	filters map[any]*Channels
-	val     any
-	l       sync.Mutex
-	// a       int
-	// b       int
+	filters  map[any]*Channels
+	val      any
+	l        sync.Mutex
+	distract chan struct{}
+	a        int
+	b        int
+}
+
+func (b *ChanSwitch) currentChan() chan struct{} {
+	if c := b.filters[b.val]; c != nil {
+		return c.open
+	}
+	return nil
 }
 
 func New(vals ...any) *ChanSwitch {
 	b := &ChanSwitch{
-		filters: make(map[any]*Channels),
-		l:       sync.Mutex{},
+		filters:  make(map[any]*Channels),
+		l:        sync.Mutex{},
+		distract: make(chan struct{}, 1),
 	}
+
+	go func() {
+		for {
+			select {
+			case b.currentChan() <- struct{}{}:
+			case <-b.distract:
+				b.b++
+				// fmt.Println("distract for change to ", b.val)
+			}
+		}
+	}()
 
 	for _, v := range vals {
 		b.Make(v)
@@ -53,7 +71,6 @@ func (b *ChanSwitch) Make(v any) *Channels {
 			open:  make(chan struct{}, 1),
 			first: make(chan struct{}, 1),
 			once:  make(chan struct{}, 1),
-			stop:  make(chan struct{}, 1),
 		}
 		b.set(v, ch)
 		return ch
@@ -66,51 +83,27 @@ func (b *ChanSwitch) Make(v any) *Channels {
 func (b *ChanSwitch) Set(v any) {
 	b.l.Lock()
 	defer b.l.Unlock()
-
-	// b.a++
-
+	b.a++
 	// get filter by value
 	ch := b.filters[v]
 	// update val
 	b.val = v
-	// reset stoped bool
-	ch.stoped = false
+	// distract repeated goroutines for change filter
+	b.distract <- struct{}{}
 	// reset first channel
 	closeChan(ch.first)
 	// reset once channel
 	activeChan(ch.once)
-	// goroutine for repeating open channel
-	go func(c *Channels) {
-		for {
-			select {
-			// on call stop channel
-			case <-c.stop:
 
-				// close once channel of old filter
+	// deactive channel got other value
+	for k, c := range b.filters {
+		if v != k {
+			if len(c.open) > 0 {
 				closeChan(c.once)
 				// close open channel of old filter
 				closeChan(c.open)
 				// close first channel of old filter
 				closeChan(ch.first)
-				// b.b++
-				// set stoped to true
-				c.stoped = true
-				// re-val again stop channel for waiting main thread
-				c.stop <- struct{}{}
-				return
-				// re-val open channel
-			case c.open <- struct{}{}:
-			}
-		}
-	}(ch)
-	// deactive channel got other value
-	for k, c := range b.filters {
-		if v != k {
-			if !c.stoped && len(c.stop) == 0 {
-				// active stop channel for stopping channel
-				activeChan(c.stop)
-				// wait for stop channel goroutine
-				<-c.stop
 			}
 		}
 	}
@@ -171,11 +164,11 @@ func (b *ChanSwitch) Values() []any {
 	return keys
 }
 
-func (b *ChanSwitch) log(v any, format string, a ...any) {
-	if b.val == v || v == "any" {
-		fmt.Printf(format+"\n", a...)
-	}
-}
+// func (b *ChanSwitch) log(v any, format string, a ...any) {
+// 	if b.val == v || v == "any" {
+// 		fmt.Printf(format+"\n", a...)
+// 	}
+// }
 
 func activeChan(c chan struct{}) {
 	select {
