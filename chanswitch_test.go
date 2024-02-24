@@ -77,17 +77,13 @@ func runIntTest(t *testing.T, m, n int) {
 
 	b.WaitFor(ctx, "shutdown")
 
-	// for {
-	time.Sleep(time.Second)
-	runtime.GC()
-	printAlloc("a")
+	time.Sleep(time.Second * 3)
+	// runtime.GC()
+	// printAlloc("a")
 
-	b = nil
-	time.Sleep(time.Second)
-	runtime.GC()
-	printAlloc("b")
+	// fmt.Println("a : ", b.a)
+	// fmt.Println("b : ", b.b)
 
-	// }
 	fmt.Println("count: ", c)
 
 	if n*4 != c {
@@ -96,7 +92,7 @@ func runIntTest(t *testing.T, m, n int) {
 }
 
 func TestIntSwitch(t *testing.T) {
-	runIntTest(t, 5, 10000)
+	runIntTest(t, 5, 40000)
 }
 
 func printAlloc(msg ...string) {

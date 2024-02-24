@@ -18,6 +18,8 @@ type ChanSwitch struct {
 	filters map[any]*Channels
 	val     any
 	l       sync.Mutex
+	// a       int
+	// b       int
 }
 
 func New(vals ...any) *ChanSwitch {
@@ -65,14 +67,14 @@ func (b *ChanSwitch) Set(v any) {
 	b.l.Lock()
 	defer b.l.Unlock()
 
+	// b.a++
+
 	// get filter by value
 	ch := b.filters[v]
 	// update val
 	b.val = v
 	// reset stoped bool
 	ch.stoped = false
-	// reset stop channel
-	closeChan(ch.stop)
 	// reset first channel
 	closeChan(ch.first)
 	// reset once channel
@@ -83,8 +85,18 @@ func (b *ChanSwitch) Set(v any) {
 			select {
 			// on call stop channel
 			case <-c.stop:
+
+				// close once channel of old filter
+				closeChan(c.once)
+				// close open channel of old filter
+				closeChan(c.open)
+				// close first channel of old filter
+				closeChan(ch.first)
+				// b.b++
 				// set stoped to true
 				c.stoped = true
+				// re-val again stop channel for waiting main thread
+				c.stop <- struct{}{}
 				return
 				// re-val open channel
 			case c.open <- struct{}{}:
@@ -95,14 +107,10 @@ func (b *ChanSwitch) Set(v any) {
 	for k, c := range b.filters {
 		if v != k {
 			if !c.stoped && len(c.stop) == 0 {
-				// active stop channel of old filter
+				// active stop channel for stopping channel
 				activeChan(c.stop)
-				// close once channel of old filter
-				closeChan(c.once)
-				// close open channel of old filter
-				closeChan(c.open)
-				// close first channel of old filter
-				closeChan(c.first)
+				// wait for stop channel goroutine
+				<-c.stop
 			}
 		}
 	}
@@ -117,6 +125,7 @@ func (b *ChanSwitch) WaitFor(ctx context.Context, v any) {
 	select {
 	case <-ctx.Done():
 	case <-ch.first:
+		activeChan(ch.first)
 	}
 
 }
