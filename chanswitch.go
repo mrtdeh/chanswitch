@@ -22,7 +22,11 @@ func (b *ChanSwitch) currentChan() chan struct{} {
 	if c := b.filters[b.val]; c != nil {
 		return c.open
 	}
-	return nil
+
+	empty := make(chan struct{})
+	// defer close(empty)
+
+	return empty
 }
 
 func repeater(b *ChanSwitch) {

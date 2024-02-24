@@ -69,7 +69,7 @@ func runIntTest(t *testing.T, m, n int) {
 		}
 
 		if m-1 == i {
-			// time.Sleep(time.Millisecond)
+			time.Sleep(time.Second)
 			b.Set("shutdown")
 		}
 
