@@ -14,10 +14,8 @@ type Channels struct {
 type ChanSwitch struct {
 	filters  map[any]*Channels
 	val      any
-	l        sync.Mutex
 	distract chan struct{}
-	a        int
-	b        int
+	l        sync.Mutex
 }
 
 func (b *ChanSwitch) currentChan() chan struct{} {
@@ -33,7 +31,6 @@ func repeater(b *ChanSwitch) {
 		select {
 		case b.currentChan() <- struct{}{}:
 		case <-b.distract:
-			b.b++
 		}
 	}
 
@@ -85,7 +82,6 @@ func (b *ChanSwitch) Make(v any) *Channels {
 func (b *ChanSwitch) Set(v any) {
 	b.l.Lock()
 	defer b.l.Unlock()
-	b.a++
 	// get filter by value
 	ch := b.filters[v]
 	// update val
@@ -99,6 +95,7 @@ func (b *ChanSwitch) Set(v any) {
 	for k, c := range b.filters {
 		if v != k {
 			if len(c.open) > 0 {
+				// close once channel of old filter
 				closeChan(c.once)
 				// close open channel of old filter
 				closeChan(c.open)

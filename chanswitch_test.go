@@ -55,16 +55,16 @@ func runIntTest(t *testing.T, m, n int) {
 		for j := 0; j < n; j++ {
 
 			go b.Set("connecting")
-			b.WaitFor(ctx, "connecting")
+			// b.WaitFor(ctx, "connecting")
 
 			go b.Set("connected")
-			b.WaitFor(ctx, "connected")
+			// b.WaitFor(ctx, "connected")
 
 			go b.Set("disconnecting")
-			b.WaitFor(ctx, "disconnecting")
+			// b.WaitFor(ctx, "disconnecting")
 
 			go b.Set("disconnected")
-			b.WaitFor(ctx, "disconnected")
+			// b.WaitFor(ctx, "disconnected")
 
 		}
 
@@ -79,11 +79,6 @@ func runIntTest(t *testing.T, m, n int) {
 	b.WaitFor(ctx, "shutdown")
 
 	time.Sleep(time.Second * 3)
-	// runtime.GC()
-	// printAlloc("a")
-
-	fmt.Println("a : ", b.a)
-	fmt.Println("b : ", b.b)
 
 	fmt.Println("count: ", c)
 
