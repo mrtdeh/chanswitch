@@ -42,8 +42,8 @@ func repeater(b *ChanSwitch) {
 func New(vals ...any) *ChanSwitch {
 	b := &ChanSwitch{
 		filters:  make(map[any]*Channels),
-		l:        sync.Mutex{},
 		distract: make(chan struct{}, 1),
+		l:        sync.Mutex{},
 	}
 
 	go repeater(b)
@@ -56,17 +56,7 @@ func New(vals ...any) *ChanSwitch {
 }
 
 func NewBool() *ChanSwitch {
-	b := &ChanSwitch{
-		filters: make(map[any]*Channels),
-		l:       sync.Mutex{},
-	}
-
-	go repeater(b)
-
-	b.Make(true)
-	b.Make(false)
-
-	return b
+	return New(true, false)
 }
 
 func (b *ChanSwitch) Make(v any) *Channels {
@@ -84,14 +74,17 @@ func (b *ChanSwitch) Make(v any) *Channels {
 
 // set filed value
 func (b *ChanSwitch) Set(v any) {
+	fmt.Println("debug 1")
 	b.l.Lock()
 	defer b.l.Unlock()
+	fmt.Println("debug 2")
 	// get filter by value
 	ch := b.filters[v]
 	// update val
 	b.val = v
 	// distract repeated goroutines for change filter
 	b.distract <- struct{}{}
+	fmt.Println("debug 3")
 	// reset once channel
 	activeChan(ch.once)
 
