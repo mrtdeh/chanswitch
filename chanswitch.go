@@ -7,9 +7,8 @@ import (
 )
 
 type Channels struct {
-	open  chan struct{}
-	once  chan struct{}
-	first chan struct{}
+	open chan struct{}
+	once chan struct{}
 }
 
 type ChanSwitch struct {
@@ -28,6 +27,17 @@ func (b *ChanSwitch) currentChan() chan struct{} {
 	return nil
 }
 
+func repeater(b *ChanSwitch) {
+
+	for {
+		select {
+		case b.currentChan() <- struct{}{}:
+		case <-b.distract:
+			b.b++
+		}
+	}
+
+}
 func New(vals ...any) *ChanSwitch {
 	b := &ChanSwitch{
 		filters:  make(map[any]*Channels),
@@ -35,16 +45,7 @@ func New(vals ...any) *ChanSwitch {
 		distract: make(chan struct{}, 1),
 	}
 
-	go func() {
-		for {
-			select {
-			case b.currentChan() <- struct{}{}:
-			case <-b.distract:
-				b.b++
-				// fmt.Println("distract for change to ", b.val)
-			}
-		}
-	}()
+	go repeater(b)
 
 	for _, v := range vals {
 		b.Make(v)
@@ -59,6 +60,8 @@ func NewBool() *ChanSwitch {
 		l:       sync.Mutex{},
 	}
 
+	go repeater(b)
+
 	b.Make(true)
 	b.Make(false)
 
@@ -68,9 +71,8 @@ func NewBool() *ChanSwitch {
 func (b *ChanSwitch) Make(v any) *Channels {
 	if chs := b.read(v); chs == nil {
 		ch := &Channels{
-			open:  make(chan struct{}, 1),
-			first: make(chan struct{}, 1),
-			once:  make(chan struct{}, 1),
+			open: make(chan struct{}, 1),
+			once: make(chan struct{}, 1),
 		}
 		b.set(v, ch)
 		return ch
@@ -90,8 +92,6 @@ func (b *ChanSwitch) Set(v any) {
 	b.val = v
 	// distract repeated goroutines for change filter
 	b.distract <- struct{}{}
-	// reset first channel
-	closeChan(ch.first)
 	// reset once channel
 	activeChan(ch.once)
 
@@ -102,13 +102,9 @@ func (b *ChanSwitch) Set(v any) {
 				closeChan(c.once)
 				// close open channel of old filter
 				closeChan(c.open)
-				// close first channel of old filter
-				closeChan(ch.first)
 			}
 		}
 	}
-	// active first channel
-	activeChan(ch.first)
 }
 
 // thread safe wait until this field change to true
@@ -117,8 +113,8 @@ func (b *ChanSwitch) WaitFor(ctx context.Context, v any) {
 
 	select {
 	case <-ctx.Done():
-	case <-ch.first:
-		activeChan(ch.first)
+	case <-ch.open:
+		activeChan(ch.open)
 	}
 
 }

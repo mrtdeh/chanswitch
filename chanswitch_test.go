@@ -55,20 +55,21 @@ func runIntTest(t *testing.T, m, n int) {
 		for j := 0; j < n; j++ {
 
 			go b.Set("connecting")
-			// b.WaitFor(ctx, "connecting")
+			b.WaitFor(ctx, "connecting")
 
 			go b.Set("connected")
-			// b.WaitFor(ctx, "connected")
+			b.WaitFor(ctx, "connected")
 
 			go b.Set("disconnecting")
-			// b.WaitFor(ctx, "disconnecting")
+			b.WaitFor(ctx, "disconnecting")
 
 			go b.Set("disconnected")
-			// b.WaitFor(ctx, "disconnected")
+			b.WaitFor(ctx, "disconnected")
 
 		}
 
 		if m-1 == i {
+			// time.Sleep(time.Millisecond)
 			b.Set("shutdown")
 		}
 
@@ -81,18 +82,19 @@ func runIntTest(t *testing.T, m, n int) {
 	// runtime.GC()
 	// printAlloc("a")
 
-	// fmt.Println("a : ", b.a)
-	// fmt.Println("b : ", b.b)
+	fmt.Println("a : ", b.a)
+	fmt.Println("b : ", b.b)
 
 	fmt.Println("count: ", c)
 
-	if n*4 != c {
-		t.Errorf("expected %v but got %v", n*4, c)
+	expected := m * n * 4
+	if expected != c {
+		t.Errorf("expected %v but got %v", expected, c)
 	}
 }
 
 func TestIntSwitch(t *testing.T) {
-	runIntTest(t, 5, 40000)
+	runIntTest(t, 5, 50000)
 }
 
 func printAlloc(msg ...string) {
