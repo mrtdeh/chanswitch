@@ -15,7 +15,7 @@ type ChanSwitch struct {
 	filters  map[any]*Channels
 	val      any
 	distract chan struct{}
-	l        sync.Mutex
+	l        sync.RWMutex
 }
 
 func (b *ChanSwitch) currentChan() chan struct{} {
@@ -43,7 +43,7 @@ func New(vals ...any) *ChanSwitch {
 	b := &ChanSwitch{
 		filters:  make(map[any]*Channels),
 		distract: make(chan struct{}, 1),
-		l:        sync.Mutex{},
+		l:        sync.RWMutex{},
 	}
 
 	go repeater(b)
@@ -78,10 +78,14 @@ func (b *ChanSwitch) Set(v any) {
 	defer b.l.Unlock()
 	// get filter by value
 	ch := b.filters[v]
+	// if b.val == "shutdown" && v != "shutdown" {
+	// 	fmt.Println("trying to set: ", v)
+	// }
 	// update val
 	b.val = v
 	// distract repeated goroutines for change filter
 	b.distract <- struct{}{}
+
 	// reset once channel
 	activeChan(ch.once)
 
@@ -89,10 +93,14 @@ func (b *ChanSwitch) Set(v any) {
 	for k, c := range b.filters {
 		if v != k {
 			if len(c.open) > 0 {
+				// if k == "shutdown" {
+				// 	fmt.Println("closing shutdown by setting: ", v)
+				// }
 				// close once channel of old filter
 				closeChan(c.once)
 				// close open channel of old filter
 				closeChan(c.open)
+
 			}
 		}
 	}
@@ -100,19 +108,23 @@ func (b *ChanSwitch) Set(v any) {
 
 // thread safe wait until this field change to true
 func (b *ChanSwitch) WaitFor(ctx context.Context, v any) {
-	ch := b.filters[v]
+	ch := b.read(v)
+	if ch == nil {
+		panic(fmt.Sprintf("value not set : %v", v))
+	}
 
 	select {
 	case <-ctx.Done():
 	case <-ch.open:
+		b.l.Lock()
 		activeChan(ch.open)
+		b.l.Unlock()
 	}
 
 }
 
 // check whether this field is true or not
 func (b *ChanSwitch) On(v any) chan struct{} { // Running Reproducible
-
 	ch := b.read(v)
 	if ch == nil {
 		panic(fmt.Sprintf("value not set : %v", v))
@@ -122,7 +134,6 @@ func (b *ChanSwitch) On(v any) chan struct{} { // Running Reproducible
 }
 
 func (b *ChanSwitch) Once(v any) <-chan struct{} { // Running Once
-
 	ch := b.read(v)
 	if ch == nil {
 		panic(fmt.Sprintf("value not set : %v", v))
@@ -132,11 +143,16 @@ func (b *ChanSwitch) Once(v any) <-chan struct{} { // Running Once
 }
 
 func (b *ChanSwitch) read(v any) *Channels {
-	return b.filters[v]
+	b.l.RLock()
+	c := b.filters[v]
+	b.l.RUnlock()
+	return c
 }
 
 func (b *ChanSwitch) set(v any, ch *Channels) {
+	b.l.Lock()
 	b.filters[v] = ch
+	b.l.Unlock()
 }
 
 func (b *ChanSwitch) Value() any {
