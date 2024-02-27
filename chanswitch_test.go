@@ -49,6 +49,7 @@ func runIntTest(t *testing.T, m, n int) {
 	printAlloc()
 	time.Sleep(time.Second)
 
+	sss := time.Now()
 	for i := 0; i < m; i++ {
 		fmt.Println("---------------------------")
 
@@ -69,16 +70,19 @@ func runIntTest(t *testing.T, m, n int) {
 		}
 
 		if m-1 == i {
-			time.Sleep(time.Second)
+			fmt.Println("complete all tasks on : ", time.Since(sss))
+			time.Sleep(time.Second * 1)
 			b.Set("shutdown")
 		}
 
 		printAlloc()
 	}
 
+	fmt.Println("shutdown...")
 	b.WaitFor(ctx, "shutdown")
+	fmt.Println("shutdown done")
 
-	time.Sleep(time.Second * 3)
+	// time.Sleep(time.Second * 3)
 
 	fmt.Println("count: ", c)
 
@@ -96,4 +100,10 @@ func printAlloc(msg ...string) {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 	fmt.Printf("%d MB "+fmt.Sprint(" ", msg)+"\n", m.Alloc/(1024*1024))
+}
+
+func printSince(msg string, a func()) {
+	t := time.Now()
+	a()
+	fmt.Println(msg, time.Since(t))
 }
