@@ -124,13 +124,48 @@ func (b *ChanSwitch) WaitFor(ctx context.Context, v any) {
 }
 
 // check whether this field is true or not
-func (b *ChanSwitch) On(v any) chan struct{} { // Running Reproducible
-	ch := b.read(v)
-	if ch == nil {
-		panic(fmt.Sprintf("value not set : %v", v))
+func (b *ChanSwitch) On(vals ...any) chan struct{} {
+	if len(vals) == 0 {
+		panic("values not set")
 	}
 
-	return ch.open
+	if len(vals) == 1 {
+		v := vals[0]
+		ch := b.read(v)
+		if ch == nil {
+			panic(fmt.Sprintf("value not set : %v", v))
+		}
+
+		return ch.open
+	}
+
+	stop := make(chan struct{})
+	agg := make(chan struct{}, 1)
+	l := &sync.Mutex{}
+
+	for _, v := range vals {
+		go func(val any) {
+			ch := b.read(val)
+			if ch == nil {
+				panic(fmt.Sprintf("value not set : %v", val))
+			}
+
+			select {
+			case <-ch.open:
+				l.Lock()
+				if len(agg) == 0 {
+					activeChan(agg)
+					close(stop)
+				}
+				l.Unlock()
+				return
+			case <-stop:
+				return
+			}
+		}(v)
+	}
+
+	return agg
 }
 
 func (b *ChanSwitch) Once(v any) <-chan struct{} { // Running Once
@@ -141,6 +176,14 @@ func (b *ChanSwitch) Once(v any) <-chan struct{} { // Running Once
 
 	return ch.once
 }
+
+// func (b *ChanSwitch) OnChange(v any) <-chan struct{} { // Running Once
+// 	ch := b.read(v)
+// 	if ch == nil {
+// 		panic(fmt.Sprintf("value not set : %v", v))
+// 	}
+
+// }
 
 func (b *ChanSwitch) read(v any) *Channels {
 	b.l.RLock()
