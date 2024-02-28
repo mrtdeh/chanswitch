@@ -3,7 +3,6 @@ package chanswitch
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"testing"
 	"time"
 )
@@ -94,12 +93,6 @@ func runIntTest(t *testing.T, m, n int) {
 
 func TestIntSwitch(t *testing.T) {
 	runIntTest(t, 5, 50000)
-}
-
-func printAlloc(msg ...string) {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	fmt.Printf("%d MB "+fmt.Sprint(" ", msg)+"\n", m.Alloc/(1024*1024))
 }
 
 func printSince(msg string, a func()) {
