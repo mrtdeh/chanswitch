@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	chanswitch "github.com/mrtdeh/chanswitch/chanswtich"
+	chanswitch "github.com/mrtdeh/chanswitch/chanswitch"
 )
 
 const (
