@@ -1,11 +1,14 @@
-package chanswitch
+package chanswitchTest
 
 import (
 	"fmt"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	chanswitch "github.com/mrtdeh/chanswitch/chanswtich"
 )
 
 const (
@@ -15,20 +18,22 @@ const (
 	Test4 = "test4"
 )
 
-func reader(b *ChanSwitch, id int) {
+func reader(b *chanswitch.ChanSwitch, id int, c *atomic.Uint64) {
 	fmt.Println("start goroutine")
-
+	_ = id
 	for {
 		select {
 
-		case a := <-b.On(Test1, Test2):
+		case a := <-b.On(Test1):
 			_ = a
-			fmt.Print("-")
+			fmt.Print(a, " ")
+			c.Add(1)
 			// fmt.Printf("g%d do test 1,2 val=%v\n", id, a)
 
-		case b := <-b.On(Test3, Test4):
+		case b := <-b.On(Test3):
 			_ = b
-			fmt.Print(".")
+			fmt.Print(b, " ")
+			c.Add(1)
 			// fmt.Printf("g%d do test 3,4 val=%v\n", id, b)
 		}
 
@@ -65,10 +70,12 @@ func runIntTest2(t *testing.T, m, n int) {
 
 	// time.Sleep(time.Second * 5)
 
-	var b *ChanSwitch = New(Test1, Test2, Test3, Test4)
+	var b *chanswitch.ChanSwitch = chanswitch.New(Test1, Test2, Test3, Test4)
+
+	var ops atomic.Uint64
 
 	for g := 0; g < 5; g++ {
-		go reader(b, g)
+		go reader(b, g, &ops)
 	}
 
 	printAlloc()
@@ -105,12 +112,10 @@ func runIntTest2(t *testing.T, m, n int) {
 	fmt.Println("end")
 	printAlloc()
 
-	// runtime.GC()
-
-	time.Sleep(time.Second * 5)
-	runtime.GC()
-
-	time.Sleep(time.Second * 5)
+	time.Sleep(time.Second * 3)
 	printAlloc()
+
+	c := ops.Load()
+	fmt.Println("c : ", c)
 
 }

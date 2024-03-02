@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"runtime"
 	"sync"
 )
 
@@ -16,6 +15,7 @@ type Channels struct {
 type ChanSwitch struct {
 	filters  map[any]*Channels
 	val      any
+	cond     *sync.Cond
 	distract chan struct{}
 	l        *sync.RWMutex
 }
@@ -43,6 +43,7 @@ func New(vals ...any) *ChanSwitch {
 		filters:  make(map[any]*Channels),
 		distract: make(chan struct{}, 1),
 		l:        &sync.RWMutex{},
+		cond:     sync.NewCond(&sync.Mutex{}), //&sync.Cond{},
 	}
 
 	go repeater(b)
@@ -73,8 +74,6 @@ func (b *ChanSwitch) Make(v any) *Channels {
 
 // set filed value
 func (b *ChanSwitch) Set(v any) {
-	// b.l.Lock()
-	// b.l.Unlock()
 
 	if b.val != nil {
 		oldch := b.read(b.val)
@@ -87,6 +86,8 @@ func (b *ChanSwitch) Set(v any) {
 
 	ch := b.read(v)
 	activeChan(ch.once)
+
+	b.cond.Broadcast()
 }
 
 // thread safe wait until this field change to true
@@ -117,81 +118,39 @@ func (b *ChanSwitch) On(vals ...any) chan any {
 		panic("values not set")
 	}
 
-	if len(vals) == 1 {
+	// 	v := vals[0]
+	// 	ch := b.read(v)
+	// 	if ch == nil {
+	// 		panic(fmt.Sprintf("value not set : %v", v))
+	// 	}
+	// 	<-ch.open
+	// 	activeChan(egg, v)
 
-		v := vals[0]
-		ch := b.read(v)
-		if ch == nil {
-			panic(fmt.Sprintf("value not set : %v", v))
+	var done bool
+
+	for _, v := range vals {
+		if b.val == v {
+			activeChan(egg, v)
+			done = true
+			break
 		}
-		<-ch.open
-		activeChan(egg, v)
-
-	} else {
-		//================================================================
-
-		var vs []any
-		var cases []reflect.SelectCase
-		for _, v := range vals {
-			ch := b.read(v)
-			if ch == nil {
-				panic(fmt.Sprintf("value not set : %v", v))
-			}
-			vs = append(vs, v)
-			cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(ch.open)})
-		}
-
-		go func() {
-			i, _, _ := reflect.Select(cases)
-			activeChan(egg, vs[i])
-		}()
-
 	}
+	//================================================================
+	b.cond.L.Lock()
+	for !done {
+		b.cond.Wait()
+		for _, v := range vals {
+			if b.val == v {
+				activeChan(egg, v)
+				done = true
+				break
+			}
+		}
+	}
+	b.cond.L.Unlock()
 
 	return egg
-	//================================================================
-
-	// stop := make(chan struct{})
-	// // l := &sync.Mutex{}
-
-	// for _, v := range vals {
-	// 	go func(val any) {
-	// 		ch := b.read(val)
-	// 		if ch == nil {
-	// 			panic(fmt.Sprintf("value not set : %v", val))
-	// 		}
-
-	// 		select {
-	// 		case <-ch.open:
-	// 			// l.Lock()
-	// 			if len(agg) == 0 {
-	// 				activeChan(agg, val)
-	// 				// fmt.Println("debug 1")
-
-	// 				closed := isClosed(stop)
-	// 				if !closed {
-	// 					close(stop)
-	// 				}
-	// 			}
-	// 			// l.Unlock()
-	// 			return
-	// 		case <-stop:
-	// 			return
-	// 		}
-	// 	}(v)
-	// }
-
-	// return agg
 }
-
-// func isClosed(stop chan struct{}) bool {
-// 	ok := true
-// 	select {
-// 	case _, ok = <-stop:
-// 	default:
-// 	}
-// 	return ok
-// }
 
 func (b *ChanSwitch) Once(v any) <-chan struct{} { // Running Once
 	ch := b.read(v)
@@ -272,16 +231,18 @@ func cleanChan(c any) {
 	}
 }
 
+// func isClosed(stop chan struct{}) bool {
+// 	ok := true
+// 	select {
+// 	case _, ok = <-stop:
+// 	default:
+// 	}
+// 	return ok
+// }
+
 // func (b *ChanSwitch) OnChange(v any) <-chan struct{} { // Running Once
 // 	ch := b.read(v)
 // 	if ch == nil {
 // 		panic(fmt.Sprintf("value not set : %v", v))
 // 	}
-
 // }
-
-func printAlloc(msg ...string) {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	fmt.Printf("%d MB "+fmt.Sprint(" ", msg)+"\n", m.Alloc/(1024*1024))
-}

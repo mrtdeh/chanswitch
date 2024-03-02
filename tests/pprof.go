@@ -1,4 +1,4 @@
-package chanswitch
+package chanswitchTest
 
 import (
 	"log"

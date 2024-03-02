@@ -1,13 +1,15 @@
-package chanswitch
+package chanswitchTest
 
 import (
 	"context"
 	"fmt"
 	"testing"
 	"time"
+
+	chanswitch "github.com/mrtdeh/chanswitch/chanswtich"
 )
 
-func worker(b *ChanSwitch, id string, c *int) {
+func worker(b *chanswitch.ChanSwitch, id string, c *int) {
 	for {
 		select {
 		case <-b.Once("connecting"):
@@ -33,7 +35,7 @@ func runIntTest(t *testing.T, m, n int) {
 
 	var c int
 	var ctx = context.Background()
-	var b *ChanSwitch = New()
+	var b *chanswitch.ChanSwitch = chanswitch.New()
 
 	b.Make("connecting")
 	b.Make("connected")
